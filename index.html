@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OrgChart Builder — Sharma & Co.</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #181c27;
+    --surface2: #1e2333;
+    --surface3: #242840;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --accent: #4f8ef7;
+    --accent2: #7c3aed;
+    --gold: #f59e0b;
+    --green: #10b981;
+    --red: #ef4444;
+    --text: #e8eaf2;
+    --text2: #8b90a7;
+    --text3: #555a72;
+    --radius: 14px;
+    --card-w: 220px;
+    --font: 'DM Sans', sans-serif;
+    --font-serif: 'DM Serif Display', serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── TOPBAR ─── */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    height: 56px;
+    background: rgba(15,17,23,0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 20px; gap: 12px;
+  }
+  .topbar-logo {
+    font-family: var(--font-serif);
+    font-size: 18px;
+    color: var(--text);
+    letter-spacing: -0.3px;
+    margin-right: auto;
+  }
+  .topbar-logo span { color: var(--accent); font-style: italic; }
+
+  .tb-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border2);
+    background: var(--surface2); color: var(--text2);
+    font-family: var(--font); font-size: 12.5px; font-weight: 500;
+    cursor: pointer; transition: all 0.18s; white-space: nowrap;
+  }
+  .tb-btn:hover { background: var(--surface3); color: var(--text); border-color: rgba(255,255,255,0.2); }
+  .tb-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .tb-btn.primary:hover { background: #3a7be8; border-color: #3a7be8; }
+  .tb-btn.danger { background: rgba(239,68,68,0.1); color: var(--red); border-color: rgba(239,68,68,0.25); }
+  .tb-btn.danger:hover { background: rgba(239,68,68,0.2); }
+  .tb-btn svg { width: 14px; height: 14px; }
+
+  /* ─── CANVAS ─── */
+  #canvas-wrap {
+    position: fixed; top: 56px; left: 0; right: 0; bottom: 0;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse at 20% 20%, rgba(79,142,247,0.04) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 80%, rgba(124,58,237,0.04) 0%, transparent 60%),
+      var(--bg);
+  }
+  #canvas-wrap::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+  #canvas {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0;
+    cursor: default;
+  }
+  #svg-layer {
+    position: absolute; top: 0; left: 0;
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  /* ─── CARDS ─── */
+  .node {
+    position: absolute;
+    width: var(--card-w);
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: box-shadow 0.2s, border-color 0.2s;
+    cursor: grab;
+    user-select: none;
+  }
+  .node:active { cursor: grabbing; }
+  .node.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(79,142,247,0.18), 0 20px 40px rgba(0,0,0,0.5);
+  }
+  .node.md-card .node-header { background: linear-gradient(135deg, #1a2a4a 0%, #1e3060 100%); border-bottom: 1px solid rgba(79,142,247,0.3); }
+  .node.pm-card .node-header { background: linear-gradient(135deg, #0d2d21 0%, #0f3d2b 100%); border-bottom: 1px solid rgba(16,185,129,0.25); }
+  .node.dept-card .node-header { background: var(--surface2); border-bottom: 1px solid var(--border); }
+
+  .node-header {
+    padding: 12px 14px 10px;
+    position: relative;
+  }
+  .node-drag-handle {
+    position: absolute; top: 8px; right: 10px;
+    opacity: 0.3; cursor: grab; font-size: 13px; line-height: 1;
+    color: var(--text2);
+    transition: opacity 0.15s;
+  }
+  .node:hover .node-drag-handle { opacity: 0.6; }
+
+  .node-role-badge {
+    display: inline-block;
+    font-size: 9.5px; font-weight: 600; letter-spacing: 0.07em;
+    text-transform: uppercase;
+    padding: 2px 8px; border-radius: 20px; margin-bottom: 6px;
+    background: rgba(79,142,247,0.12); color: var(--accent);
+  }
+  .node.pm-card .node-role-badge { background: rgba(16,185,129,0.12); color: var(--green); }
+  .node.dept-card .node-role-badge { background: rgba(255,255,255,0.06); color: var(--text2); }
+
+  .editable {
+    background: transparent; border: none; outline: none;
+    color: var(--text); font-family: var(--font);
+    display: block; width: 100%;
+  }
+  .editable:focus {
+    background: rgba(255,255,255,0.04);
+    border-radius: 4px;
+    outline: 1px solid rgba(79,142,247,0.4);
+  }
+  .node-name { font-size: 14px; font-weight: 600; margin-bottom: 2px; padding: 2px 4px; border-radius: 4px; }
+  .node-subrole { font-size: 11px; font-weight: 400; padding: 2px 4px; border-radius: 4px; }
+  .node-subrole-wrap { color: var(--text2); }
+
+  .node-body { padding: 10px 14px; }
+
+  .emp-block { margin-bottom: 10px; }
+  .emp-label { font-size: 9px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); margin-bottom: 4px; }
+  .emp-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+  .emp-avatar {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700; color: #fff; flex-shrink: 0;
+    letter-spacing: 0;
+  }
+  .emp-name-field {
+    font-size: 12px; color: var(--text);
+    flex: 1;
+  }
+
+  .kra-block { margin-top: 2px; }
+  .kra-header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .kra-label { font-size: 9px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); }
+  .kra-add-btn {
+    font-size: 10px; font-weight: 500; color: var(--accent);
+    background: none; border: none; cursor: pointer; padding: 0;
+    opacity: 0.7; transition: opacity 0.15s;
+  }
+  .kra-add-btn:hover { opacity: 1; }
+  .kra-item {
+    display: flex; align-items: flex-start; gap: 5px;
+    margin-bottom: 4px; position: relative;
+  }
+  .kra-bullet {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--accent); margin-top: 6px; flex-shrink: 0;
+    opacity: 0.5;
+  }
+  .kra-text {
+    font-size: 11px; color: var(--text2);
+    flex: 1; line-height: 1.5;
+    min-height: 18px;
+  }
+  .kra-del {
+    background: none; border: none; cursor: pointer;
+    color: var(--text3); font-size: 14px; line-height: 1;
+    padding: 0 2px; opacity: 0; transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .kra-item:hover .kra-del { opacity: 1; }
+  .kra-del:hover { color: var(--red); }
+
+  .node-footer {
+    padding: 8px 14px;
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .node-footer-btn {
+    flex: 1; font-size: 10.5px; font-weight: 500;
+    padding: 5px 8px; border-radius: 6px;
+    border: 1px solid var(--border2);
+    background: transparent; color: var(--text3);
+    cursor: pointer; transition: all 0.15s; font-family: var(--font);
+    text-align: center;
+  }
+  .node-footer-btn:hover { background: var(--surface3); color: var(--text2); }
+  .node-footer-btn.connect-btn { color: var(--accent); border-color: rgba(79,142,247,0.25); }
+  .node-footer-btn.connect-btn:hover { background: rgba(79,142,247,0.1); }
+  .node-footer-btn.del-node-btn { color: var(--red); border-color: rgba(239,68,68,0.2); }
+  .node-footer-btn.del-node-btn:hover { background: rgba(239,68,68,0.1); }
+
+  /* ─── CONNECTIONS ─── */
+  .conn-line {
+    stroke: rgba(79,142,247,0.35);
+    stroke-width: 1.5;
+    fill: none;
+    stroke-dasharray: none;
+    marker-end: url(#arrowhead);
+    pointer-events: stroke;
+    cursor: pointer;
+    transition: stroke 0.15s;
+  }
+  .conn-line:hover { stroke: rgba(79,142,247,0.8); stroke-width: 2.5; }
+  .conn-line.selected-conn { stroke: var(--accent); stroke-width: 2.5; }
+
+  /* ─── CONNECT MODE ─── */
+  body.connect-mode #canvas { cursor: crosshair; }
+  body.connect-mode .node { cursor: pointer; }
+  .connect-active { border-color: var(--gold) !important; box-shadow: 0 0 0 3px rgba(245,158,11,0.25) !important; }
+  .connect-hint {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: 8px; padding: 8px 16px; font-size: 12px; color: var(--gold);
+    z-index: 200; pointer-events: none;
+  }
+
+  /* ─── ADD PANEL ─── */
+  .add-panel {
+    position: fixed; top: 68px; right: 16px; z-index: 90;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 16px; width: 220px;
+    display: none;
+  }
+  .add-panel.open { display: block; }
+  .add-panel-title { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text2); margin-bottom: 12px; }
+  .add-panel label { display: block; font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+  .add-panel input, .add-panel select {
+    width: 100%; padding: 7px 10px;
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: 7px; color: var(--text); font-family: var(--font); font-size: 12px;
+    outline: none; margin-bottom: 10px;
+  }
+  .add-panel input:focus, .add-panel select:focus { border-color: var(--accent); }
+  .add-panel select option { background: var(--surface2); }
+
+  /* ─── MINIMAP ─── */
+  #minimap {
+    position: fixed; bottom: 16px; right: 16px; z-index: 90;
+    width: 160px; height: 100px;
+    background: rgba(24,28,39,0.9);
+    border: 1px solid var(--border2);
+    border-radius: 10px; overflow: hidden;
+  }
+  #minimap-canvas { width: 100%; height: 100%; }
+
+  /* ─── ZOOM CONTROLS ─── */
+  .zoom-controls {
+    position: fixed; bottom: 20px; left: 20px; z-index: 90;
+    display: flex; gap: 6px;
+  }
+  .zoom-btn {
+    width: 34px; height: 34px; border-radius: 8px;
+    background: var(--surface2); border: 1px solid var(--border2);
+    color: var(--text2); font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s; font-family: var(--font);
+  }
+  .zoom-btn:hover { background: var(--surface3); color: var(--text); }
+  #zoom-label { font-size: 11px; color: var(--text3); padding: 0 6px; display: flex; align-items: center; }
+
+  /* ─── TOAST ─── */
+  .toast {
+    position: fixed; top: 68px; left: 50%; transform: translateX(-50%);
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: 8px; padding: 8px 16px;
+    font-size: 12px; color: var(--text); z-index: 300;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  .toast.show { opacity: 1; }
+
+  /* ─── SCROLLBAR ─── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-logo">Org<span>Chart</span> Builder</div>
+
+  <button class="tb-btn" id="btn-add-node" onclick="toggleAddPanel()">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
+    Add Node
+  </button>
+
+  <button class="tb-btn" id="btn-connect" onclick="toggleConnectMode()">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="3" cy="8" r="2"/><circle cx="13" cy="3" r="2"/><circle cx="13" cy="13" r="2"/><line x1="5" y1="7.5" x2="11" y2="4"/><line x1="5" y1="8.5" x2="11" y2="12"/></svg>
+    Connect
+  </button>
+
+  <button class="tb-btn" onclick="deleteSelectedConn()">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l10 10M13 3L3 13"/></svg>
+    Del Connection
+  </button>
+
+  <button class="tb-btn" onclick="autoLayout()">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6" y="1" width="4" height="4" rx="1"/><rect x="1" y="10" width="4" height="4" rx="1"/><rect x="11" y="10" width="4" height="4" rx="1"/><line x1="8" y1="5" x2="8" y2="7.5"/><line x1="3" y1="7.5" x2="13" y2="7.5"/><line x1="3" y1="7.5" x2="3" y2="10"/><line x1="13" y1="7.5" x2="13" y2="10"/></svg>
+    Auto Layout
+  </button>
+
+  <button class="tb-btn" onclick="fitView()">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 5V2h3M12 2h3v3M1 11v3h3M12 14h3v-3"/></svg>
+    Fit View
+  </button>
+
+  <button class="tb-btn primary" onclick="exportPNG()">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h10M8 2v8M5 7l3 3 3-3"/></svg>
+    Export PNG
+  </button>
+</div>
+
+<!-- ADD NODE PANEL -->
+<div class="add-panel" id="add-panel">
+  <div class="add-panel-title">Add New Node</div>
+  <label>Role / Department</label>
+  <input type="text" id="new-role" placeholder="e.g. HR Manager" />
+  <label>Person Name</label>
+  <input type="text" id="new-name" placeholder="e.g. Ramesh Kumar" />
+  <label>Type</label>
+  <select id="new-type">
+    <option value="dept-card">Department</option>
+    <option value="pm-card">Manager</option>
+    <option value="md-card">Director / MD</option>
+  </select>
+  <button class="tb-btn primary" style="width:100%;justify-content:center;margin-top:4px" onclick="addNode()">Add Node</button>
+</div>
+
+<!-- CANVAS -->
+<div id="canvas-wrap">
+  <div id="canvas">
+    <svg id="svg-layer" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="rgba(79,142,247,0.6)"/>
+        </marker>
+        <marker id="arrowhead-sel" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#4f8ef7"/>
+        </marker>
+      </defs>
+    </svg>
+  </div>
+</div>
+
+<!-- ZOOM CONTROLS -->
+<div class="zoom-controls">
+  <button class="zoom-btn" onclick="zoom(-0.15)">−</button>
+  <span id="zoom-label">100%</span>
+  <button class="zoom-btn" onclick="zoom(0.15)">+</button>
+  <button class="zoom-btn" onclick="resetZoom()" title="Reset">⌂</button>
+</div>
+
+<!-- CONNECT MODE HINT -->
+<div class="connect-hint" id="connect-hint" style="display:none">
+  Click source node → then target node &nbsp;|&nbsp; <strong>ESC</strong> to cancel
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── STATE ───
+let nodes = [];
+let connections = [];
+let nodeCount = 0;
+let scale = 1;
+let panX = 0, panY = 0;
+let isPanning = false, panStart = {};
+let isDragging = false, dragNode = null, dragOffX = 0, dragOffY = 0;
+let connectMode = false, connectSource = null;
+let selectedConn = null;
+let selectedNode = null;
+
+const canvas = document.getElementById('canvas');
+const svgLayer = document.getElementById('svg-layer');
+const wrap = document.getElementById('canvas-wrap');
+
+// ─── INITIAL DATA ───
+const initialData = [
+  {
+    id: 'n0', type: 'md-card', role: 'Managing Director', name: 'Babulal Sharma',
+    employees: ['', ''],
+    kras: ['Strategic planning & vision', 'Business development', 'Financial oversight', 'Stakeholder management'],
+    x: 400, y: 60
+  },
+  {
+    id: 'n1', type: 'pm-card', role: 'Production Manager', name: '',
+    employees: ['', ''],
+    kras: ['Production planning', 'Quality control', 'Team supervision', 'Output target fulfilment'],
+    x: 60, y: 380
+  },
+  {
+    id: 'n2', type: 'dept-card', role: 'EA', name: '',
+    employees: ['', ''],
+    kras: ['MD schedule management', 'Correspondence handling', 'Meeting coordination'],
+    x: 310, y: 380
+  },
+  {
+    id: 'n3', type: 'dept-card', role: 'Accountant', name: '',
+    employees: ['', ''],
+    kras: ['Bookkeeping & ledger', 'GST & tax filing', 'Payroll processing'],
+    x: 560, y: 380
+  },
+  {
+    id: 'n4', type: 'dept-card', role: 'CRM', name: '',
+    employees: ['', ''],
+    kras: ['Client relationship mgmt', 'Lead tracking & follow-up', 'Customer feedback'],
+    x: 810, y: 380
+  },
+  {
+    id: 'n5', type: 'dept-card', role: 'PC', name: '',
+    employees: ['', ''],
+    kras: ['Project coordination', 'Timeline & milestone tracking', 'Cross-team communication'],
+    x: 1060, y: 380
+  },
+  {
+    id: 'n6', type: 'dept-card', role: 'AutoCAD', name: '',
+    employees: ['', ''],
+    kras: ['Design & drafting', 'Technical drawing accuracy', 'Drawing revision mgmt'],
+    x: 1310, y: 380
+  },
+  {
+    id: 'n7', type: 'dept-card', role: 'MIS', name: '',
+    employees: ['', ''],
+    kras: ['Data reporting & dashboards', 'MIS report preparation', 'Data accuracy & updates'],
+    x: 1560, y: 380
+  }
+];
+
+const initialConnections = [
+  { from: 'n0', to: 'n1' }, { from: 'n0', to: 'n2' }, { from: 'n0', to: 'n3' },
+  { from: 'n0', to: 'n4' }, { from: 'n0', to: 'n5' }, { from: 'n0', to: 'n6' },
+  { from: 'n0', to: 'n7' }
+];
+
+// ─── CREATE NODE ELEMENT ───
+function createNodeEl(data) {
+  const el = document.createElement('div');
+  el.className = `node ${data.type}`;
+  el.id = data.id;
+  el.style.left = data.x + 'px';
+  el.style.top = data.y + 'px';
+
+  const initials = (data.name || data.role || '?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+
+  // Build employees HTML
+  let empHtml = '';
+  (data.employees || ['','']).forEach((emp, i) => {
+    const av = emp ? emp.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) : (i===0?'E1':'E2');
+    empHtml += `
+      <div class="emp-row">
+        <div class="emp-avatar">${av}</div>
+        <input class="editable emp-name-field" value="${emp}" placeholder="Employee ${i+1} name..." oninput="updateAvatar(this)" data-idx="${i}">
+      </div>`;
+  });
+
+  // Build KRA HTML
+  let kraHtml = '';
+  (data.kras || []).forEach(k => {
+    kraHtml += kraItemHtml(k);
+  });
+
+  el.innerHTML = `
+    <div class="node-header">
+      <span class="node-drag-handle">⠿</span>
+      <div class="node-role-badge">${data.type === 'md-card' ? 'Director' : data.type === 'pm-card' ? 'Manager' : 'Department'}</div>
+      <input class="editable node-name" value="${data.role || ''}" placeholder="Role / Post name...">
+      <div class="node-subrole-wrap">
+        <input class="editable node-subrole" value="${data.name || ''}" placeholder="Person name...">
+      </div>
+    </div>
+    <div class="node-body">
+      <div class="emp-block">
+        <div class="emp-label">Team Members</div>
+        ${empHtml}
+        <button class="kra-add-btn" style="font-size:10px;margin-top:3px" onclick="addEmployee(this)">+ add member</button>
+      </div>
+      <div class="kra-block">
+        <div class="kra-header-row">
+          <span class="kra-label">KRA — Key Result Areas</span>
+          <button class="kra-add-btn" onclick="addKra(this)">+ add</button>
+        </div>
+        <div class="kra-list">${kraHtml}</div>
+      </div>
+    </div>
+    <div class="node-footer">
+      <button class="node-footer-btn connect-btn" onclick="startConnect('${data.id}')">⟶ Connect</button>
+      <button class="node-footer-btn del-node-btn" onclick="removeNode('${data.id}')">✕ Delete</button>
+    </div>`;
+
+  setupNodeDrag(el, data);
+  canvas.appendChild(el);
+  return el;
+}
+
+function kraItemHtml(text='') {
+  return `<div class="kra-item"><span class="kra-bullet"></span><input class="editable kra-text" value="${text}" placeholder="Add KRA..."><button class="kra-del" onclick="this.closest('.kra-item').remove()">×</button></div>`;
+}
+
+// ─── DRAG ───
+function setupNodeDrag(el, data) {
+  el.addEventListener('mousedown', e => {
+    if (connectMode) { handleConnectClick(data.id); return; }
+    if (e.target.matches('input, button, .kra-del, .kra-add-btn, .node-footer-btn')) return;
+    e.preventDefault();
+    isDragging = true; dragNode = el;
+    const rect = el.getBoundingClientRect();
+    dragOffX = e.clientX - rect.left;
+    dragOffY = e.clientY - rect.top;
+    el.style.zIndex = 50;
+    selectNode(data.id);
+  });
+}
+
+document.addEventListener('mousemove', e => {
+  if (isDragging && dragNode) {
+    const wx = (e.clientX - wrap.getBoundingClientRect().left - panX) / scale - dragOffX / scale;
+    const wy = (e.clientY - wrap.getBoundingClientRect().top - panY) / scale - dragOffY / scale;
+    dragNode.style.left = wx + 'px';
+    dragNode.style.top = wy + 'px';
+    const nd = nodes.find(n => n.id === dragNode.id);
+    if (nd) { nd.x = wx; nd.y = wy; }
+    drawConnections();
+  }
+  if (isPanning) {
+    panX += e.clientX - panStart.x;
+    panY += e.clientY - panStart.y;
+    panStart = { x: e.clientX, y: e.clientY };
+    applyTransform();
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  if (isDragging && dragNode) { dragNode.style.zIndex = ''; isDragging = false; dragNode = null; }
+  isPanning = false;
+});
+
+// ─── PAN ───
+wrap.addEventListener('mousedown', e => {
+  if (e.target === wrap || e.target === canvas || e.target === svgLayer) {
+    isPanning = true; panStart = { x: e.clientX, y: e.clientY };
+    selectedConn = null; drawConnections();
+    deselectNode();
+  }
+});
+
+// ─── ZOOM ───
+wrap.addEventListener('wheel', e => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? -0.08 : 0.08;
+  const rect = wrap.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const prev = scale;
+  scale = Math.max(0.2, Math.min(2.5, scale + delta));
+  panX = mx - (mx - panX) * (scale / prev);
+  panY = my - (my - panY) * (scale / prev);
+  applyTransform();
+}, { passive: false });
+
+function zoom(d) {
+  scale = Math.max(0.2, Math.min(2.5, scale + d));
+  applyTransform();
+}
+function resetZoom() { scale = 1; panX = 100; panY = 40; applyTransform(); }
+function applyTransform() {
+  canvas.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
+  document.getElementById('zoom-label').textContent = Math.round(scale*100)+'%';
+}
+
+function fitView() {
+  if (!nodes.length) return;
+  const xs = nodes.map(n=>n.x), ys = nodes.map(n=>n.y);
+  const minX=Math.min(...xs)-30, minY=Math.min(...ys)-30;
+  const maxX=Math.max(...xs)+260, maxY=Math.max(...ys)+400;
+  const W=wrap.clientWidth, H=wrap.clientHeight;
+  const sc = Math.min(W/(maxX-minX), H/(maxY-minY), 1.2) * 0.85;
+  scale = sc;
+  panX = (W - (maxX-minX)*sc)/2 - minX*sc;
+  panY = (H - (maxY-minY)*sc)/2 - minY*sc;
+  applyTransform();
+}
+
+// ─── CONNECTIONS ───
+function getCenter(id) {
+  const nd = nodes.find(n=>n.id===id);
+  if (!nd) return null;
+  const el = document.getElementById(id);
+  const w = el ? el.offsetWidth : 220;
+  const h = el ? el.offsetHeight : 200;
+  return { x: nd.x + w/2, y: nd.y + h/2, w, h };
+}
+
+function drawConnections() {
+  const existing = svgLayer.querySelectorAll('path.conn-line');
+  existing.forEach(e => e.remove());
+
+  connections.forEach((conn, idx) => {
+    const a = getCenter(conn.from), b = getCenter(conn.to);
+    if (!a || !b) return;
+
+    // Exit bottom of source, enter top of target
+    const x1 = a.x, y1 = a.y + a.h/2;
+    const x2 = b.x, y2 = b.y - 1;
+    const cy = (y1 + y2) / 2;
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', `M${x1},${y1} C${x1},${cy} ${x2},${cy} ${x2},${y2}`);
+    path.setAttribute('class', 'conn-line' + (selectedConn===idx?' selected-conn':''));
+    if (selectedConn===idx) path.setAttribute('marker-end','url(#arrowhead-sel)');
+    else path.setAttribute('marker-end','url(#arrowhead)');
+    path.addEventListener('click', e => { e.stopPropagation(); selectedConn = (selectedConn===idx?null:idx); drawConnections(); });
+    svgLayer.appendChild(path);
+  });
+}
+
+// ─── CONNECT MODE ───
+function toggleConnectMode() {
+  connectMode = !connectMode;
+  document.body.classList.toggle('connect-mode', connectMode);
+  document.getElementById('connect-hint').style.display = connectMode ? 'block' : 'none';
+  document.getElementById('btn-connect').classList.toggle('primary', connectMode);
+  if (!connectMode) { connectSource = null; document.querySelectorAll('.node').forEach(n=>n.classList.remove('connect-active')); }
+}
+
+function startConnect(id) {
+  if (!connectMode) { connectMode = true; document.body.classList.add('connect-mode'); document.getElementById('connect-hint').style.display='block'; document.getElementById('btn-connect').classList.add('primary'); }
+  handleConnectClick(id);
+}
+
+function handleConnectClick(id) {
+  if (!connectSource) {
+    connectSource = id;
+    document.getElementById(id).classList.add('connect-active');
+  } else {
+    if (connectSource !== id) {
+      const exists = connections.find(c=>c.from===connectSource&&c.to===id);
+      if (!exists) { connections.push({ from: connectSource, to: id }); drawConnections(); toast('Connection added!'); }
+      else toast('Already connected');
+    }
+    document.querySelectorAll('.node').forEach(n=>n.classList.remove('connect-active'));
+    connectSource = null;
+    toggleConnectMode();
+  }
+}
+
+function deleteSelectedConn() {
+  if (selectedConn === null) { toast('Select a connection first'); return; }
+  connections.splice(selectedConn, 1);
+  selectedConn = null;
+  drawConnections();
+  toast('Connection deleted');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { if (connectMode) toggleConnectMode(); }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selectedConn !== null && !e.target.matches('input')) {
+    deleteSelectedConn();
+  }
+});
+
+// ─── NODE ACTIONS ───
+function selectNode(id) {
+  document.querySelectorAll('.node').forEach(n=>n.classList.remove('selected'));
+  document.getElementById(id)?.classList.add('selected');
+  selectedNode = id;
+}
+function deselectNode() {
+  document.querySelectorAll('.node').forEach(n=>n.classList.remove('selected'));
+  selectedNode = null;
+}
+
+function removeNode(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+  nodes = nodes.filter(n=>n.id!==id);
+  connections = connections.filter(c=>c.from!==id&&c.to!==id);
+  drawConnections();
+  toast('Node deleted');
+}
+
+function addEmployee(btn) {
+  const empBlock = btn.closest('.emp-block');
+  const rows = empBlock.querySelectorAll('.emp-row');
+  const div = document.createElement('div');
+  div.className = 'emp-row';
+  div.innerHTML = `<div class="emp-avatar">+</div><input class="editable emp-name-field" value="" placeholder="Member name..." oninput="updateAvatar(this)">`;
+  empBlock.insertBefore(div, btn);
+}
+
+function updateAvatar(input) {
+  const row = input.closest('.emp-row');
+  const av = row.querySelector('.emp-avatar');
+  const val = input.value.trim();
+  av.textContent = val ? val.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) : '+';
+}
+
+function addKra(btn) {
+  const list = btn.closest('.kra-block').querySelector('.kra-list');
+  const item = document.createElement('div');
+  item.innerHTML = kraItemHtml('');
+  list.appendChild(item);
+  item.querySelector('input').focus();
+}
+
+// ─── ADD NODE ───
+function toggleAddPanel() {
+  document.getElementById('add-panel').classList.toggle('open');
+}
+
+function addNode() {
+  const role = document.getElementById('new-role').value.trim() || 'New Role';
+  const name = document.getElementById('new-name').value.trim();
+  const type = document.getElementById('new-type').value;
+  const id = 'n' + (++nodeCount + 100);
+  const cx = wrap.clientWidth/2, cy = wrap.clientHeight/2;
+  const x = (cx - panX)/scale - 110, y = (cy - panY)/scale - 100;
+  const data = { id, type, role, name, employees: ['',''], kras: ['Add KRA here...'], x, y };
+  nodes.push(data);
+  createNodeEl(data);
+  drawConnections();
+  document.getElementById('add-panel').classList.remove('open');
+  document.getElementById('new-role').value = '';
+  document.getElementById('new-name').value = '';
+  toast('Node added!');
+}
+
+// ─── AUTO LAYOUT ───
+function autoLayout() {
+  // Find root nodes (no incoming connections)
+  const targets = new Set(connections.map(c=>c.to));
+  const roots = nodes.filter(n=>!targets.has(n.id));
+  if (!roots.length) { toast('No root node found'); return; }
+
+  const W = 260, H = 320, GAP_X = 40, GAP_Y = 100;
+  const levels = {};
+  function assignLevel(id, lv) {
+    levels[id] = Math.max(levels[id]||0, lv);
+    connections.filter(c=>c.from===id).forEach(c=>assignLevel(c.to, lv+1));
+  }
+  roots.forEach(r=>assignLevel(r.id, 0));
+
+  const byLevel = {};
+  nodes.forEach(n=>{ const lv=levels[n.id]||0; (byLevel[lv]=byLevel[lv]||[]).push(n); });
+
+  Object.entries(byLevel).forEach(([lv, group]) => {
+    const totalW = group.length*(W+GAP_X) - GAP_X;
+    group.forEach((nd, i) => {
+      nd.x = (i*(W+GAP_X)) - totalW/2 + 800;
+      nd.y = lv * (H + GAP_Y) + 60;
+      const el = document.getElementById(nd.id);
+      if (el) { el.style.left = nd.x+'px'; el.style.top = nd.y+'px'; }
+    });
+  });
+  drawConnections();
+  setTimeout(fitView, 50);
+  toast('Layout applied!');
+}
+
+// ─── EXPORT PNG ───
+function exportPNG() {
+  toast('Preparing export...');
+  setTimeout(() => {
+    // Gather bounds
+    if (!nodes.length) return;
+    const pad = 60;
+    const xs = nodes.map(n=>n.x), ys = nodes.map(n=>n.y);
+    const els = nodes.map(n=>document.getElementById(n.id)).filter(Boolean);
+    const maxW = Math.max(...els.map(e=>e.offsetWidth));
+    const maxH = Math.max(...els.map(e=>e.offsetHeight));
+    const minX=Math.min(...xs)-pad, minY=Math.min(...ys)-pad;
+    const totalW=Math.max(...xs)+maxW+pad-minX, totalH=Math.max(...ys)+maxH+pad-minY;
+
+    const cvs = document.createElement('canvas');
+    cvs.width = totalW; cvs.height = totalH;
+    const ctx = cvs.getContext('2d');
+    ctx.fillStyle = '#0f1117';
+    ctx.fillRect(0,0,totalW,totalH);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    for (let x=0;x<totalW;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,totalH);ctx.stroke();}
+    for (let y=0;y<totalH;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(totalW,y);ctx.stroke();}
+
+    // Connections
+    ctx.strokeStyle = 'rgba(79,142,247,0.45)';
+    ctx.lineWidth = 2;
+    connections.forEach(conn => {
+      const a = getCenter(conn.from), b = getCenter(conn.to);
+      if (!a||!b) return;
+      const x1=a.x-minX, y1=a.y+a.h/2-minY, x2=b.x-minX, y2=b.y-1-minY;
+      const cy=(y1+y2)/2;
+      ctx.beginPath();
+      ctx.moveTo(x1,y1);
+      ctx.bezierCurveTo(x1,cy,x2,cy,x2,y2);
+      ctx.stroke();
+      // Arrowhead
+      ctx.fillStyle = 'rgba(79,142,247,0.6)';
+      ctx.beginPath(); ctx.moveTo(x2-5,y2-8); ctx.lineTo(x2,y2); ctx.lineTo(x2+5,y2-8); ctx.fill();
+    });
+
+    // Use html2canvas-like approach via foreignObject
+    const serializer = new XMLSerializer();
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg2 = document.createElementNS(svgNS,'svg');
+    svg2.setAttribute('width',totalW); svg2.setAttribute('height',totalH);
+    svg2.setAttribute('xmlns','http://www.w3.org/2000/svg');
+    svg2.setAttribute('xmlns:xhtml','http://www.w3.org/1999/xhtml');
+
+    nodes.forEach(nd => {
+      const el = document.getElementById(nd.id);
+      if (!el) return;
+      const fo = document.createElementNS(svgNS,'foreignObject');
+      fo.setAttribute('x', nd.x-minX); fo.setAttribute('y', nd.y-minY);
+      fo.setAttribute('width', el.offsetWidth); fo.setAttribute('height', el.offsetHeight);
+      const clone = el.cloneNode(true);
+      clone.style.position='static'; clone.style.left='0'; clone.style.top='0';
+      fo.appendChild(clone);
+      svg2.appendChild(fo);
+    });
+
+    const svgStr = serializer.serializeToString(svg2);
+    const blob = new Blob([svgStr],{type:'image/svg+xml'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'orgchart.svg'; a.click();
+    URL.revokeObjectURL(url);
+    toast('Exported as SVG!');
+  }, 100);
+}
+
+// ─── TOAST ───
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2500);
+}
+
+// ─── INIT ───
+function init() {
+  initialData.forEach(d => { nodes.push(d); nodeCount = Math.max(nodeCount, parseInt(d.id.slice(1))); });
+  connections.push(...initialConnections);
+  nodes.forEach(d => createNodeEl(d));
+  setTimeout(() => { drawConnections(); fitView(); }, 100);
+}
+
+init();
+</script>
+</body>
+</html>
